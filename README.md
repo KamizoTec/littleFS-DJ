@@ -13,7 +13,7 @@ Edit `index.html` or any other LittleFS file **live directly on the device** usi
 
 
 <p align="center">
-  <img src="screenshots/editor.jpg" alt="FS-DJ Web Editor" width="900">
+  <img src="editor.jpeg" alt="FS-DJ Web Editor" width="900">
 </p>
 
 
