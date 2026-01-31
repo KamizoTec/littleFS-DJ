@@ -1,0 +1,542 @@
+//fallback Editor KAMIZOTEC 2026
+
+#ifndef WEBPAGE_H
+#define WEBPAGE_H
+
+//  this is the optional fallback editor Page in case the little FS Filesystem is missing or corrupt
+// it is identic with the original Editor but in this version is a format FS button integrated
+const char fallback_html[] = R"rawliteral(
+
+<!DOCTYPE html>
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=0.75">
+
+<link rel="icon" href="/favicon.ico" type="image/x-icon">
+
+<title>FS-DJ Fallback</title>
+
+<style>
+body {
+    background:#222;
+    color:#eee;
+    font-family:Arial;
+    margin:10px;
+}
+
+textarea {
+    width:99%;
+    height:80vh; 
+    background:#111;
+    color:#0f0;
+    font-family:monospace;
+    padding:5px;
+    border:1px solid #444;
+}
+
+button {
+    padding:5px 15px;
+    margin:5px;
+    font-size:16px;
+    cursor:pointer;
+}
+
+button:hover { background-color:tomato; }
+
+#status {
+    margin-top:1px;
+    padding:10px;
+    background:#333;
+    border-left:5px solid #666;
+    font-family:monospace;
+    white-space:pre-wrap;
+}
+
+/* Breadcrumb + filelist */
+#breadcrumb {
+    margin:5px 0 8px 0;
+    font-size:14px;
+}
+
+#breadcrumb span {
+    cursor:pointer;
+    color:#8cf;
+}
+
+#breadcrumb span:hover {
+    text-decoration:underline;
+}
+
+#fileList {
+    border:1px solid #444;
+    padding:5px;
+    max-height:135px;
+    overflow-y:auto;
+    margin-bottom:10px;
+    background:#111;
+}
+
+.fileItem {
+    padding:3px 6px;
+    cursor:pointer;
+    font-family:monospace;
+}
+
+.fileItem:hover {
+    background:#333;
+}
+
+.fileItem.selected {
+    background:#555;
+}
+
+/* System-Menü right up */
+#sysMenu {
+  position: absolute;
+  top: 20px;
+  right: 30px;
+  cursor: pointer;
+  user-select: none;
+  z-index: 1000;
+}
+
+#sysinfoBox {
+  position: absolute;
+  top: 20px;  
+  right: 30px;  
+  background: #222;
+  border: 1px solid #555;
+  padding: 8px;
+  border-radius: 6px;
+  box-shadow: 0 0 6px #000;
+  color: #8cf;
+  font-family: monospace;
+  display: none;
+  z-index: 5000;
+  max-width: 240px;
+  white-space: pre-wrap;
+  cursor: pointer;
+  word-break: break-all;
+}
+
+</style>
+
+</head>
+<body>
+
+<h2> ⇄  FS-DJ Fallback </h2>
+
+<br>
+
+<!-- ---------- EDITOR  Breadcrumb navigation + filelist -------------- -->
+
+<div id="breadcrumb"></div>
+
+<!-- ⚠️ SysInfo Button ⚠️-->
+<div id="sysMenu" onclick="showInfo()">
+  <h3 style="margin:0; padding:0;">SysInfo ⚠️</h3>
+</div>
+
+<!-- SysInfo Popup -->
+<div id="sysinfoBox" onclick="closeInfo()">
+  <pre id="sysinfo"></pre>
+</div>
+
+
+<!-- list -->
+<div id="fileList"></div>
+
+ <!-- ---------------------- Buttons -------------------------- --> 
+
+<button onclick="save()">SAVE</button>
+<button onclick="saveAs()">SAVE AS</button>
+<button onclick="makeBackup()">BACKUP</button>
+<button onclick="deleteSelected()">DELETE</button>
+<button onclick="doFormat()">FORMAT FS</button>
+
+
+<div id="status">Editor ready to rumble / select file</div>
+<textarea id="editor"></textarea>
+
+ <!-- ---------------------- end editor -------------------------- -->
+
+<script>
+
+function showInfo() {
+  var xhr = new XMLHttpRequest();
+  xhr.open("GET", "/systeminfo", true);
+
+  xhr.onreadystatechange = function() {
+    if (xhr.readyState === 4) {
+      document.getElementById("sysinfoBox").style.display = "block";
+      document.getElementById("sysinfo").textContent = xhr.responseText;
+
+      // Uptime  (seconds)
+
+      let match = xhr.responseText.match(/Uptime:\s*(\d+)/);
+      if (match) {
+        uptimeSeconds = parseInt(match[1], 10);
+        startLiveUptime();
+      }
+    }
+  };
+
+  xhr.send();
+}
+
+
+function closeInfo() {
+  document.getElementById("sysinfoBox").style.display = "none";
+}
+
+// uptime
+
+let uptimeSeconds = 0;
+let uptimeTimer = null;
+
+function formatUptime(sec) {
+  let days = Math.floor(sec / 86400);
+  sec %= 86400;
+  let hours = Math.floor(sec / 3600);
+  sec %= 3600;
+  let minutes = Math.floor(sec / 60);
+  let seconds = sec % 60;
+
+  let out = "";
+  if (days > 0) out += days + "d ";
+  if (hours > 0 || days > 0) out += hours + "h ";
+  if (minutes > 0 || hours > 0 || days > 0) out += minutes + "m ";
+  out += seconds + "s";
+
+  return out;
+}
+
+function startLiveUptime() {
+  if (uptimeTimer) clearInterval(uptimeTimer);
+
+  uptimeTimer = setInterval(() => {
+    uptimeSeconds++;
+    let pre = document.getElementById("sysinfo");
+    pre.textContent = pre.textContent.replace(
+      /Uptime:.*$/m,
+      "Uptime: " + formatUptime(uptimeSeconds)
+    );
+  }, 1000);
+}
+
+// format 
+
+function doFormat() {
+  if (!confirm("format LittleFS")) return;
+
+  var xhr = new XMLHttpRequest();
+  xhr.open("GET", "/format", true);
+  xhr.onreadystatechange = function() {
+    if (xhr.readyState == 4) alert(xhr.responseText);
+  };
+  xhr.send();
+}
+
+
+</script>
+
+ <!-- ************* editor script **************** --> 
+
+<script>
+
+var loadedFile = "";
+var currentDir = "/";
+var selectedPath = "";   
+
+// STATUS
+
+function showStatus(msg, error) {
+    var box = document.getElementById("status");
+    if (error) {
+        box.style.borderLeftColor = "#c00";
+    } else {
+        box.style.borderLeftColor = "#0c0";
+    }
+    box.textContent = msg;
+}
+
+// Breadcrumb + List reload
+
+function refresh(dir) {
+    if (!dir) dir = "/";
+    currentDir = dir;
+
+    // Breadcrumb build
+
+    var parts = dir.split("/");
+    var path = "";
+    var html = '<span onclick="refresh(\'/\')">Root</span>';
+    for (var i = 0; i < parts.length; i++) {
+        if (parts[i] === "") continue;
+        path += "/" + parts[i];
+        html += ' &gt; <span onclick="refresh(\'' + path + '\')">' + parts[i] + '</span>';
+    }
+    document.getElementById("breadcrumb").innerHTML = html;
+
+    // get list from ESP
+    var xhr = new XMLHttpRequest();
+ 
+      xhr.open("GET", "/list?dir=" + (dir), true);
+
+    xhr.onreadystatechange = function() {
+        if (xhr.readyState === 4 && xhr.status === 200) {
+            var items;
+            try {
+                items = JSON.parse(xhr.responseText);
+            } catch (e) {
+                showStatus("ERROR parsing /list", true);
+                return;
+            }
+
+            var out = "";
+            for (var i = 0; i < items.length; i++) {
+                var item = items[i];
+
+                // show name
+                var display = item.name;
+                var idx = display.lastIndexOf("/");
+                if (idx >= 0) {
+                    display = display.substring(idx + 1);
+                }
+
+ // show files folders and filesize
+
+if (item.isDir) {
+    out += '<div class="fileItem" onclick="openDir(\'' +
+           item.name + '\')" data-path="' + item.name +
+           '">📁 ' + display + '</div>';
+} else {
+    var fileSizeKB = (item.size / 1024).toFixed(2); // convert Bytes to KB
+    out += '<div class="fileItem" onclick="selectFile(\'' +
+           item.name + '\', this)" data-path="' + item.name + '">' +
+           '📄 ' + display +
+           '<span class="fileSize" style="float: right;">' + fileSizeKB + ' KB</span>' +
+           '</div>';
+}
+
+            }
+
+            document.getElementById("fileList").innerHTML = out;
+        }
+    };
+
+    xhr.send();
+}
+
+// open folder
+
+function openDir(path) {
+    refresh(path);
+}
+
+// choose file + load
+
+function selectFile(path, elem) {
+    selectedPath = path;
+    loadedFile = path;
+
+    var list = document.getElementById("fileList");
+    var children = list.getElementsByClassName("fileItem");
+    for (var i = 0; i < children.length; i++) {
+        children[i].className = children[i].className.replace(" selected", "");
+    }
+    if (elem) {
+        if (elem.className.indexOf("selected") === -1) {
+            elem.className += " selected";
+        }
+    }
+
+    loadFile(path);
+}
+
+
+function loadAgain() {
+    refresh(currentDir);
+}
+
+// load file
+
+function loadFile(path) {
+    var xhr = new XMLHttpRequest();
+
+      xhr.open("GET", "/load?file=" + (path), true);
+
+    xhr.onreadystatechange = function() {
+        if (xhr.readyState === 4 && xhr.status === 200) {
+            document.getElementById("editor").value = xhr.responseText;
+            loadedFile = path;
+            showStatus("load: " + path, false);
+          
+        }
+    };
+
+    xhr.send();
+}
+
+// SAVE
+
+function save() {
+    if (!loadedFile) {
+        showStatus("No valid file loaded", true);
+        return;
+    }
+
+    var content = document.getElementById("editor").value;
+    var payload = "file=" + loadedFile + "\n" + content;
+
+    var xhr = new XMLHttpRequest();
+    xhr.open("POST", "/save", true);
+    xhr.setRequestHeader("Content-Type", "application/octet-stream");
+
+    xhr.onreadystatechange = function() {
+        if (xhr.readyState === 4) {
+            if (xhr.status === 200) {
+                showStatus("saved: " + loadedFile, false);
+                refresh(currentDir);
+            } else {
+                showStatus("ERROR: " + xhr.responseText, true);
+            }
+        }
+    };
+
+    xhr.send(payload);
+}
+
+// SAVE AS
+
+function saveAs() {
+    var defaultName = loadedFile || (currentDir === "/" ? "/new.txt" : currentDir + "/new.txt");
+    var newName = prompt("save as:", defaultName);
+    if (!newName) return;
+
+    if (newName.charAt(0) !== "/") {
+        if (currentDir === "/") {
+            newName = "/" + newName;
+        } else {
+        newName = currentDir + "/" + newName;
+        }
+    }
+
+    var content = document.getElementById("editor").value;
+    var payload = "file=" + newName + "\n" + content;
+
+    var xhr = new XMLHttpRequest();
+    xhr.open("POST", "/save", true);
+    xhr.setRequestHeader("Content-Type", "application/octet-stream");
+
+    xhr.onreadystatechange = function() {
+        if (xhr.readyState === 4) {
+            if (xhr.status === 200) {
+                showStatus("saved as: " + newName, false);
+                loadedFile = newName;
+                selectedPath = newName;
+                refresh(currentDir);
+            } else {
+                showStatus("ERROR: " + xhr.responseText, true);
+            }
+        }
+    };
+
+    xhr.send(payload);
+}
+
+// BACKUP
+
+function makeBackup() {
+    if (!loadedFile || loadedFile === "/" || loadedFile.endsWith("/")) {
+        showStatus("NO valid file loaded!", true);
+        return;
+    }
+
+    var slash = loadedFile.lastIndexOf("/");
+    var dir = loadedFile.substring(0, slash);
+    if (dir.length === 0) dir = "/";
+
+    var name = loadedFile.substring(slash + 1);
+
+   // var backupPath = dir + "/backup/" + name;
+var backupPath = (dir === "/" ? "/backup/" : dir + "/backup/") + name;
+
+
+    var newName = prompt("Backup save as:", backupPath);
+    if (!newName) return;
+
+    if (newName.charAt(0) !== "/") {
+        newName = "/" + newName;
+    }
+
+    var content = document.getElementById("editor").value;
+    var payload = "file=" + newName + "\n" + content;
+
+    var xhr = new XMLHttpRequest();
+    xhr.open("POST", "/save", true);
+    xhr.setRequestHeader("Content-Type", "application/octet-stream");
+
+    xhr.onreadystatechange = function() {
+        if (xhr.readyState === 4) {
+            if (xhr.status === 200) {
+                showStatus("Backup saved: " + newName, false);
+                refresh(currentDir);
+            } else {
+                showStatus("Backup failed: " + xhr.responseText, true);
+            }
+        }
+    };
+
+    xhr.send(payload);
+}
+
+// DELETE
+
+function deleteSelected() {
+    var target = selectedPath || loadedFile; 
+    if (!target) {
+        showStatus("No File/Folder selected!", true); 
+        return;
+    }
+
+    if (!confirm("DELETE: " + target + " ?")) return;
+
+    var xhr = new XMLHttpRequest(); 
+    xhr.open("POST", "/delete", true); 
+    xhr.setRequestHeader("Content-Type", "application/x-www-form-urlencoded"); 
+
+    // Send delete (URL-kodiert)
+
+    xhr.send("file=" + (target)); 
+
+    // check Requests
+
+    xhr.onreadystatechange = function() {
+        if (xhr.readyState === 4) { 
+            if (xhr.status === 200) { 
+                showStatus("deleted: " + target, false); 
+                selectedPath = ""; 
+                loadedFile = ""; 
+                document.getElementById("editor").value = ""; 
+                refresh(currentDir); 
+            } else {
+                showStatus("ERROR: " + xhr.responseText, true); 
+            }
+        }
+    };
+}
+
+// Start: load Root
+refresh("/");
+
+</script>
+
+</body>
+</html>
+
+
+)rawliteral";
+
+#endif
