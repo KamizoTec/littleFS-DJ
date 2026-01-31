@@ -21,12 +21,19 @@ Edit `index.html` or any other LittleFS file **live directly on the device** usi
 ******************** Features *************************
 
 📁 Browse and create LittleFS files and directories
+
 📝 Load, edit, save, save-as files directly in the browser
+
 ♻️ Backup files with one click
+
 🗑️ Delete files
+
 ⚡ Fast AsyncWebServer (non-blocking)
+
 📊 Live System Info (ESP8266 / ESP32 auto-detection)
+
 💾 LittleFS usage info (total / used / free)
+
 ⚠️ on ESP start the file-checker removes invalid filenames to protect the JSON structure
 
 
